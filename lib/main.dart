@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:scoped_model/scoped_model.dart';
+import 'package:provider/provider.dart';
 
 void main() {
-  runApp(App());
+  runApp(
+    ChangeNotifierProvider(
+        create: (_) => AppModel(),
+        child: App(),
+    )
+  );
 }
 
 const List<String> urls = [
@@ -15,28 +20,21 @@ const List<String> urls = [
 class App extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return ScopedModel<AppModel>(
-        model: AppModel(),
-        child: MaterialApp(
+    return MaterialApp(
             title: 'Photo Viewer',
-            home: ScopedModelDescendant<AppModel>(
-              builder: (context, child, model) {
-                return GalleryPage(title: "Image Gallery", model: model);
-              },
-            )));
+            home: GalleryPage(
+              title: "Image Gallery",
+            ),
+    );
   }
 }
 
-class AppModel extends Model {
+class AppModel extends ChangeNotifier {
   bool isTagging = false;
 
   List<PhotoState> photoStates = List.of(urls.map((url) => PhotoState(url)));
 
   Set<String> tags = {"all", "nature", "cat"};
-
-  static AppModel of(BuildContext context) {
-    return ScopedModel.of<AppModel>(context);
-  }
 
   void toggleTagging(String? url) {
     isTagging = !isTagging;
@@ -89,9 +87,8 @@ class PhotoState {
 
 class GalleryPage extends StatelessWidget {
   final String? title;
-  final AppModel? model;
 
-  GalleryPage({this.title, this.model});
+  GalleryPage({this.title});
 
   @override
   Widget build(BuildContext context) {
@@ -100,17 +97,17 @@ class GalleryPage extends StatelessWidget {
       body: GridView.count(
           primary: false,
           crossAxisCount: 2,
-          children: List.of(model!.photoStates
+          children: List.of(context.watch<AppModel>().photoStates
               .where((ps) => ps.display ?? true)
-              .map((ps) => Photo(state: ps, model: AppModel.of(context)))
+              .map((ps) => Photo(state: ps))
           )
       ),
       drawer: Drawer(
           child: ListView(
-        children: List.of(model!.tags.map((t) => ListTile(
+        children: List.of(context.watch<AppModel>().tags.map((t) => ListTile(
               title: Text(t),
               onTap: () {
-                model?.selectTag(t);
+                context.read<AppModel>().selectTag(t);
                 Navigator.of(context).pop();
               },
             ))),
@@ -121,19 +118,18 @@ class GalleryPage extends StatelessWidget {
 
 class Photo extends StatelessWidget {
   final PhotoState? state;
-  final AppModel? model;
 
-  Photo({this.state, this.model});
+  Photo({this.state});
 
   @override
   Widget build(BuildContext context) {
     List<Widget> children = [
       GestureDetector(
           child: Image.network(state!.url),
-          onLongPress: () => model?.toggleTagging(state!.url))
+          onLongPress: () => context.read<AppModel>().toggleTagging(state!.url))
     ];
 
-    if (model!.isTagging) {
+    if (context.watch<AppModel>().isTagging) {
       children.add(Positioned(
           left: 20,
           top: 0,
@@ -142,7 +138,7 @@ class Photo extends StatelessWidget {
                   .copyWith(unselectedWidgetColor: Colors.grey[200]),
               child: Checkbox(
                 onChanged: (value) {
-                  model?.onPhotoSelect(state!.url, value!);
+                  context.read<AppModel>().onPhotoSelect(state!.url, value!);
                 },
                 value: state!.selected,
                 activeColor: Colors.white,
